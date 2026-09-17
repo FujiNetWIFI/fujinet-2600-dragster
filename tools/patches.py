@@ -268,10 +268,32 @@ dict(
 ; strobes CXCLR at all -- so a frozen frame is simply the same frame again.
 ReadJoy:
 	LDA	DGADV
-	BNE	RestartDetect
+	BNE	DGGO
 	JMP	L_F4E2
-	NOP
-	NOP
+;
+; AND THE ONE THING THE HOOK DESTROYED, PUT BACK.
+;
+; Dragster carries the player index in the X REGISTER, across a hundred and
+; eighty-three bytes. $F22A does `TAX` and the next instruction to touch X is
+; $F2DD `LDA Joy0,X` -- the restage test -- and in between there is nothing but
+; the audio engine, VSYNC, the frame counter and the attract colours. The logic
+; proper reloads it at $F32E; this one read does not.
+;
+; `JSR DGWAIT` at $F285 lands exactly in the middle of that span, and the
+; network machine uses X for every mailbox register it writes. So the restage
+; test read $AD + whatever step the transport happened to be on -- a different
+; cell on each console, because the two are never on the same step.
+;
+; The symptom was as indirect as the cause: three or four times a minute one
+; console staged a race a single simulated frame before the other, the checksums
+; disagreed for about four ticks, the repair pressed RESET into the wire and the
+; two came back together. It looked exactly like a transport fault and was not.
+;
+; Two bytes, and they restore the invariant at the only place that depends on
+; it. Preserving X inside DGWAIT instead would have cost four stack bytes, and
+; the stack is six.
+DGGO:
+	LDX	CurPlayer
 	NOP
 	NOP
 	NOP

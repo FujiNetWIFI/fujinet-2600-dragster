@@ -53,10 +53,10 @@ local function hold()
 end
 hold()
 
-emu.add_machine_frame_notifier(function()
+_G._det_frame = emu.add_machine_frame_notifier(function()
     if not mem then
         mem = manager.machine.devices[":maincpu"].spaces["program"]
-        tap = mem:install_write_tap(0x0296, 0x0296, "det_t64",
+        _G._det_tap = mem:install_write_tap(0x0296, 0x0296, "det_t64",
             function(offset, data, mask)
                 if (data & 0xFF) == 0x21 then sample() end
                 return data
@@ -78,6 +78,6 @@ emu.add_machine_frame_notifier(function()
     hold()
 end)
 
-emu.register_stop(function()
+_G._det_stop = emu.add_machine_stop_notifier(function()
     for _, l in ipairs(out) do print(l) end
 end)

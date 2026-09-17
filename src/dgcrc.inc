@@ -23,20 +23,52 @@
 ; §4.21 is exactly this -- two consoles agreed perfectly while playing different
 ; variations, because the variation was not in the sum.
 ;
-; $D8/$D9 are deliberately left out. They are the kernel's scratch, written in
-; the other bank after this is sampled, and a checksum that covers a cell whose
-; value depends on where the raster was is a checksum that reports differences
-; it cannot explain.
+; TWO CELLS INSIDE THAT RANGE ARE DELIBERATELY SKIPPED, and finding out why
+; cost a rig run.
+;
+; BoomTimer ($D0/$D1) is the explosion sound's countdown. The logic SETS it, at
+; $F3EF, behind the lockstep gate -- but it is read at $F237 and decremented at
+; $F23D, and BOTH of those are inside the audio engine, which sits at
+; $F226-$F284, in front of the hook at $F285 and therefore in front of the gate.
+; The audio runs on every frame the television draws, including stalled ones,
+; because a sound that stuttered whenever the transport was late would be worse
+; than the stall it was reporting.
+;
+; So BoomTimer advances once per VIDEO frame while the rest of the simulation
+; advances once per SIMULATED frame, and the number of frames the two differ by
+; is the local stall pattern -- which is the one thing that differs between two
+; consoles by design. Combat's §4.5 in the other direction: there the trap was a
+; quantity sampled only on the ticks that ran, here it is one advanced on the
+; frames that did not.
+;
+; It is safe to skip, and provably so: $F237, $F23D and $F3EF are its only three
+; references in the whole cartridge, and everything it reaches is AUDV0, AUDF0
+; and AUDC0. No audio cell reaches physics. This is Dragster's version of "B&W
+; stays local".
+;
+; The symptom, for the next person: 27 CRC MISMATCH lines in the relay log,
+; clustered in a burst of four or five consecutive ticks, arriving only after an
+; engine blew -- and two consoles that were byte-identical before it and after.
+;
+; $D8/$D9 are left out too, for the ordinary reason. They are the kernel's
+; scratch, written in the other bank after this is sampled, and a checksum that
+; covers a cell whose value depends on where the raster was is a checksum that
+; reports differences it cannot explain.
 ;
 ; The fold is `asl a / adc`, which is a rotate-and-add: position-sensitive, so a
 ; pair of cells that swapped values does not cancel.
 DGCRC:
         lda     #0
-        ldx     #$2F            ; $A8 + $2F = $D7, counted down to 0
+        ldx     #$27            ; $A8 + $27 = $CF, counted down to 0
 DGCRC1: asl     a
         adc     Rpm,x
         dex
         bpl     DGCRC1
+        ldx     #$05            ; and $D2 + $05 = $D7, skipping BoomTimer
+DGCRC2: asl     a
+        adc     RaceDone,x
+        dex
+        bpl     DGCRC2
         asl     a
         adc     GameVar
         asl     a
