@@ -36,6 +36,42 @@ DGCLR:  sta     VSYNC,x
         ldx     #$FF
         txs
 
+; AND THE SHADOWS BACK TO IDLE, WHICH IS NOT OPTIONAL.
+;
+; The restage clear reaches $A8 in a match, and $AD/$AE are the joystick
+; shadows. Zero in a joystick nibble is not "nothing pressed" -- the wire and
+; the port are both active low, so zero is ALL FOUR DIRECTIONS pressed at once,
+; including bit 2, which is Dragster's gear lever.
+;
+; Stock never sees this: its clear starts at $B9 and stops short of the
+; shadows, and in any case $F2C8 re-read the port before anything looked at it.
+; This port deleted that read -- DGMIX writes the cells directly -- and DGMIX
+; runs only on a TICK boundary, so in a match the fabricated press stands for up
+; to three frames. Long enough for $F43B to see the lever go down and come back
+; up, which arms a shift and then releases it, and a release while the tree is
+; counting is a jump start: every single race began with EARLY on the screen.
+;
+; Nothing desynchronised, because both consoles fabricated the same press at the
+; same tick. `rig`, `rig-play` and `tree` all passed while the game was
+; unplayable, which is the whole argument for having a gate that measures the
+; RACE and not just the agreement.
+;
+; Harmless on the local path, and provably: DGLOC0 rewrites both cells from the
+; hardware on every frame, before anything reads them.
+; ONLY IN A MATCH. Not networked, DGCLRX is $B9 and the clear never reaches the
+; shadows at all, so stock's behaviour is stock's behaviour -- and `make det`
+; compares this path byte for byte against the 1980 ROM, which leaves $AD/$AE
+; at zero on a cold start and re-reads the port before anything looks at them.
+; Writing $0F here unconditionally is a two-cell difference on frame three, and
+; the gate found it.
+        lda     DGENT
+        and     #DGE_NET
+        beq     DGCLR9
+        lda     #IW_STICK       ; $0F -- nothing pushed
+        sta     Joy0
+        sta     Joy1
+DGCLR9:
+
 ; ORA, NEVER LDA. The boot bank has already set DGE_NET and the role in here,
 ; and a match that lost its role on the first frame would have both consoles
 ; driving the top lane.

@@ -32,10 +32,12 @@ CDTP5   EQU     $1A80
 
 CDLINES EQU     FNTROW*FNTCLH   ; 21 rows of 6 scanlines = 126
 
-; Combat measures 263 lines VSYNC-to-VSYNC, and the boot bank has to match it:
-; the peer-left screen appears in the MIDDLE of a session, long after
-; `make frames` stops excusing the handover, and a screen of a different length
-; there would be a real finding about a real change of frame length.
+; STOCK DRAGSTER MEASURES 262 LINES VSYNC-to-VSYNC, and the boot bank has to
+; match it -- not because the splash screen matters, but because the peer-left
+; screen appears in the MIDDLE of a session, long after `make frames` stops
+; excusing the handover frames. A screen of a different length there should be
+; a real finding about a real change, not a permanent discrepancy that was
+; nobody's bug and that everyone learns to ignore.
 ;
 ; 29, NOT Combat's 30, and the difference is the whole reason this constant is
 ; not simply inherited.
@@ -46,11 +48,6 @@ CDLINES EQU     FNTROW*FNTCLH   ; 21 rows of 6 scanlines = 126
 ; DRAGSTER MEASURES -- `make frames` says so, 705 frames of 705 -- and Combat's
 ; 30 gives 263, which is right for Combat and wrong here.
 ;
-; It matters because the boot bank is not only a splash screen. CSLEFT is
-; entered in the MIDDLE of a session, long after `make frames` has stopped
-; excusing handover frames, so a screen of a different length there is a real
-; finding about a real change -- and it would be buried under a permanent
-; one-line discrepancy that was nobody's bug.
 CDVBL   EQU     37
 CDOS    EQU     29
 CDPAD   EQU     (192-CDLINES)/2 ; 33 above and below

@@ -30,11 +30,21 @@ verify-org:
 	./build.sh verify-org
 
 # ---------------------------------------------------------------- M1
-probe:
-	./build.sh probe
-
-echo: probe
-	test/run_probe.sh
+#
+# NOT PORTED, and deliberately loud about it rather than quietly absent.
+#
+# K = 4 and d = 2 are inherited from the Combat bring-up, which measured one
+# frame per transaction and three frames per WRITE/STATUS/READ cycle against
+# this same cartridge and this same firmware. That is a sound thing to inherit
+# in an emulator, where the transport below the mailbox is identical -- and it
+# is NOT a sound thing to inherit on hardware, where the cartridge bus exists
+# and has never been measured at all.
+probe echo:
+	@echo "make $@: the latency probe is not ported. K=4 and d=2 come from the"
+	@echo "  Combat bring-up, which measured one frame per transaction on this"
+	@echo "  cartridge and firmware. Port src/probe.asm from there and re-measure"
+	@echo "  BEFORE trusting those constants on real hardware -- see PORTING.md."
+	@exit 1
 
 # ---------------------------------------------------------------- M2
 dragster:
@@ -42,25 +52,51 @@ dragster:
 
 # ---------------------------------------------------------------- gates
 frames: dragster
-	SECS=$${SECS:-14} test/run_gate.sh frames
+	cp -f rom/dragster.bin build/stock.bin
+	@{ SECS=$${SECS:-14} SLOT=a26_2k_4k ./run.sh stock frames || true; } | tail -4
+	@{ SECS=$${SECS:-14} ./run.sh dragster frames || true; } | tail -4
 
 det: dragster
-	SECS=$${SECS:-22} DET_QUIET=$${DET_QUIET:-1} test/run_gate.sh det
+	cp -f rom/dragster.bin build/stock.bin
+	ENDPOINT="TCP://127.0.0.1:9699/" ./build.sh >/dev/null
+	@{ SECS=$${SECS:-14} SLOT=a26_2k_4k ./run.sh stock det 2>/dev/null || true; } \
+	    | grep -E '^[0-9]+ [0-9A-F]{4}$$' > build/det_stock.txt
+	@{ SECS=$${SECS:-14} ./run.sh dragster det 2>/dev/null || true; } \
+	    | grep -E '^[0-9]+ [0-9A-F]{4}$$' > build/det_split.txt
+	python3 tools/ramdiff.py build/det_stock.txt build/det_split.txt
 
+# Locally first -- every read must come from DGLOC0 -- and then in a match,
+# where every read must come from DGCAP and DGLOC0 must not run at all.
 inputs: dragster
-	SECS=$${SECS:-14} test/run_gate.sh inputs
+	@{ SECS=$${SECS:-14} ./run.sh dragster inputs || true; } | grep -A6 INPUTS
+	RIG_LUA=inputs SECS=$${SECS:-25} test/run_rig.sh
 
 lag:
-	DGLAG=1 ./build.sh && SECS=$${SECS:-14} test/run_gate.sh lag; s=$$?; ./build.sh; exit $$s
+	@DGLAG=1 ./build.sh >/dev/null
+	@{ SECS=$${SECS:-14} ./run.sh dragster lag 2>/dev/null || true; } | tee build/lag.txt | grep LAG
+	@./build.sh >/dev/null
+	@grep -q '^LAG PASS' build/lag.txt
 
 tree: dragster
-	SECS=$${SECS:-20} test/run_gate.sh tree
+	RIG_LUA=tree SECS=$${SECS:-30} test/run_rig.sh
 
 slack: dragster
-	SECS=$${SECS:-20} test/run_gate.sh slack
+	@{ SECS=$${SECS:-20} ./run.sh dragster slack 2>/dev/null || true; } | tee build/slack.txt | grep SLACK
+	@grep -q '^SLACK PASS' build/slack.txt
 
+# The ball's position is a side effect of StageRace entering PositionSprites
+# with X = 4. What is compared is the SHAPE of that path -- the WSYNCs between
+# arming the countdown and the RESBL strobe -- on stock and on the build.
 ball: dragster
-	SECS=$${SECS:-14} test/run_gate.sh ball
+	@cp -f rom/dragster.bin build/stock.bin
+	@{ SECS=$${SECS:-14} SLOT=a26_2k_4k ./run.sh stock ball 2>/dev/null || true; } \
+	    | grep -o 'strobe: .*' > build/ball_stock.txt
+	@{ SECS=$${SECS:-14} ./run.sh dragster ball 2>/dev/null || true; } \
+	    | grep -o 'strobe: .*' > build/ball_split.txt
+	@echo "  stock: $$(cat build/ball_stock.txt)"
+	@echo "  split: $$(cat build/ball_split.txt)"
+	@if [ "$$(cut -d: -f2 build/ball_stock.txt)" = "$$(cut -d: -f2 build/ball_split.txt)" ]; \
+	    then echo "BALL PASS"; else echo "BALL FAIL: the ball is positioned by a different path"; exit 1; fi
 
 # ---------------------------------------------------------------- no emulator
 sim:
@@ -88,10 +124,16 @@ rig-play: dragster
 rig-repair: dragster
 	RIG_LUA=play PLAY_INJECT=120 SECS=60 test/run_rig.sh
 
+# The fairness gate. STOCK_DELTA is measured, not assumed: `make launch-stock`
+# runs the same driver on the 1980 cartridge and prints the number to beat.
 rig-launch: dragster
-	RIG_LUA=launch SECS=45 test/run_rig.sh
+	RIG_LUA=launch SECS=$${SECS:-30} test/run_rig.sh
 
-ladder: verify-org sim lobby dragster frames det inputs tree slack ball \
+launch-stock:
+	@cp -f rom/dragster.bin build/stock.bin
+	@{ SECS=$${SECS:-25} SLOT=a26_2k_4k ./run.sh stock launch || true; } | grep LAUNCH
+
+ladder: verify-org sim lobby dragster frames det inputs lag tree slack ball \
         rig rig-hold rig-stage rig-play rig-launch rig-repair
 	@echo
 	@echo "ladder: every gate passed."

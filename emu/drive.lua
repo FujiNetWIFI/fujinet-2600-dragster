@@ -1,4 +1,15 @@
 -- drive.lua -- find the input sequence that actually drives a Dragster.
+--
+-- Kept because it is how the controls were worked out, and the manual is not in
+-- the box any more. The answer, for the record: the stick pushed RIGHT stages a
+-- race while both engines are quiet; the GEAR LEVER IS THE STICK PULLED LEFT
+-- (bit 2), and it is pull-and-release -- pulling arms the shift by setting bit
+-- 7 of Gear, releasing it takes the gear, and releasing while the tree is still
+-- counting is the jump start; and the button is the throttle, which will
+-- happily hold the revs past the limit and blow the engine.
+--
+-- It prints the whole of both cars every thirty frames, which is the quickest
+-- way to see what a change to the driving actually did.
 local mem
 local fields = {}
 local frames = 0
