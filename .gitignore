@@ -10,6 +10,9 @@ build/
 rom/*.bin
 rom/*.asm
 
+# The C relay's binary. server/c/ itself is source and belongs in the tree.
+server/c/dragster-relay
+
 # Python
 __pycache__/
 *.pyc

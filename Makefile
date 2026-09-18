@@ -21,7 +21,8 @@ VCS   ?= $(HOME)/Workspace/fn-2600/pico/atari-2600
 
 .PHONY: all verify-org dragster probe echo frames det inputs lag tree slack \
         sim lobby session rig rig-hold rig-stage rig-play rig-repair \
-        rig-launch ladder play stop clean
+        rig-launch ladder play stop clean \
+        relay-c relay-c-strict relay-c-asan server-diff
 
 all: dragster
 
@@ -101,6 +102,25 @@ ball: dragster
 # ---------------------------------------------------------------- no emulator
 sim:
 	python3 tools/dragster_client_sim.py
+
+# The C relay. server/dragster_relay_server.py stays canonical; this binary is
+# a transliteration of it, and `make server-diff` is what keeps it honest.
+# Every gate that starts a relay takes SERVER=c to run this one instead:
+#
+#   make relay-c && SERVER=c make sim lobby rig
+#
+relay-c:
+	$(MAKE) -C server/c
+relay-c-strict:
+	$(MAKE) -C server/c strict
+relay-c-asan:
+	$(MAKE) -C server/c asan
+
+# The differential: both relays through identical scripted scenarios, with
+# every frame the clients receive and every line the servers log compared byte
+# for byte. A non-empty diff is a bug in the C port.
+server-diff: relay-c
+	python3 tools/server_diff.py
 
 lobby:
 	python3 tools/test_lobby_pub.py
